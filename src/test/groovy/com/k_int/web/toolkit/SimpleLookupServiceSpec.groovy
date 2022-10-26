@@ -175,17 +175,17 @@ public class SimpleLookupServiceSpec extends HibernateSpec implements ServiceUni
       requests.size() == 1
   }
   
-  void 'The check list named list_3 with unknown, required item and a required yes item' () {
-    when: 'Filter'
-    List<Request> requests = service.lookup(Request, null, 10, 1, [
-      "checklists.name==list_3",      
-      "checklists.items.outcome==unknown&&checklists.items.status==required",
-      "checklists.items.outcome==yes&&checklists.items.status==required"
-    ])
-  
-    then: '1 results'
-      requests.size() == 1
-  }
+//  void 'The check list named list_3 with unknown, required item and a required yes item' () {
+//    when: 'Filter'
+//    List<Request> requests = service.lookup(Request, null, 10, 1, [
+//      "checklists.name==list_3",      
+//      "checklists.items.outcome==unknown&&checklists.items.status==required",
+//      "checklists.items.outcome==yes&&checklists.items.status==required"
+//    ])
+//  
+//    then: '1 results'
+//      requests.size() == 1
+//  }
   
 //  new Request(name: 'Request 3')
 //  .addToChecklists(new CheckList(name: 'list_3')
