@@ -1,6 +1,10 @@
 package com.k_int.web.toolkit
 
 
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
 import org.grails.orm.hibernate.HibernateDatastore
 import org.grails.orm.hibernate.cfg.Settings
 import org.hibernate.cfg.Environment
@@ -18,6 +22,7 @@ import grails.persistence.Entity
 import grails.test.hibernate.HibernateSpec
 import grails.testing.services.ServiceUnitTest
 import grails.web.databinding.DataBindingUtils
+import spock.lang.Ignore
 import spock.lang.Stepwise
 
 
@@ -45,16 +50,18 @@ public class SimpleLookupServiceSpec extends HibernateSpec implements ServiceUni
     TransactionStatus transaction = manager.getTransaction(new DefaultTransactionAttribute())
     
     // Add some data
-    new Request(name: 'Request 1')
+    Request r = new Request(name: 'Request 1')
     .addToChecklists(new CheckList(name: 'list_1')
       .addToItems(new CheckListItem(
         outcome: 'Yes',
         status: 'required'
       ))
     )
-    .save(failOnError: true)
+    r.number = 1
+    r.date = LocalDate.now()
+    r.save(failOnError: true)
     
-    new Request(name: 'Request 2')
+    r = new Request(name: 'Request 2')
     .addToChecklists(new CheckList(name: 'list_2')
       .addToItems(new CheckListItem(
         outcome: 'no',
@@ -65,9 +72,12 @@ public class SimpleLookupServiceSpec extends HibernateSpec implements ServiceUni
         status: 'required'
       ))
     )
+    r.number = 2
+    r.date = LocalDate.now()
+    r.save(failOnError: true)
     .save(failOnError: true)
     
-    new Request(name: 'Request 3')
+    r = new Request(name: 'Request 3')
     .addToChecklists(new CheckList(name: 'list_3')
       .addToItems(new CheckListItem(
         outcome: 'unknown',
@@ -84,12 +94,15 @@ public class SimpleLookupServiceSpec extends HibernateSpec implements ServiceUni
         status: 'not required'
       ))
     )
+    r.number = 3
+    r.date = LocalDate.now().plusDays(1) // tomorrow
+    r.save(failOnError: true)
     .save(failOnError: true, flush: true)
       
     // Commit the transaction so we can use the data that was added.  
     manager.commit(transaction)
   }
-
+  
   void 'Check Data' () {
     expect: "We have 3 Requests"
       Request.findAll()?.size() == 3
@@ -100,7 +113,6 @@ public class SimpleLookupServiceSpec extends HibernateSpec implements ServiceUni
     and: 'We have 6 check lists items'
       CheckListItem.findAll()?.size() == 6
   }
-  
   
   void 'Find requests where check list item has outcome set to "yes"' () {
     
@@ -132,7 +144,6 @@ public class SimpleLookupServiceSpec extends HibernateSpec implements ServiceUni
       requests.size() == 1
   }
   
-  
   void 'Find requests where check list item status is "not required"' () {
     
     when: 'Filter by value case-insensitively'
@@ -163,41 +174,152 @@ public class SimpleLookupServiceSpec extends HibernateSpec implements ServiceUni
     then: '1 results'
       requests.size() == 1
   }
+
+  void 'Test inline junctions' () {
+    when: 'Filter using conjunction'
+      List<Request> requests = service.lookup(Request, null, 10, 1, [
+        "checklists.items.outcome==unknown&&checklists.items.status==required"
+      ])
+  
+    then: '1 result'
+      requests.size() == 1
+      
+      
+    when: 'Filter using disjunction'
+      requests = service.lookup(Request, null, 10, 1, [
+        "checklists.items.outcome==unknown||checklists.items.status==required"
+      ])
+  
+    then: '3 results'
+      requests.size() == 3
+      
+    when: 'Filter required OR no outcome (null)'
+      requests = service.lookup(Request, null, 10, 1, [
+        "checklists.items.outcome isnull||checklists.items.status=i=REQUIRED"
+      ])
+  
+    then: '3 results'
+      requests.size() == 3
+      
+    when: 'Filter not required OR no outcome (null)'
+      requests = service.lookup(Request, null, 10, 1, [
+        "checklists.items.outcome isnull||checklists.items.status=i=NOT REQUIRED"
+      ])
+  
+    then: '2 results'
+      requests.size() == 2
+  }
   
   void 'The check list named list_3 and an unknown, required item' () {
     when: 'Filter'
-    List<Request> requests = service.lookup(Request, null, 10, 1, [
-      "checklists.name==list_3",
-      "checklists.items.outcome==unknown&&checklists.items.status==required"
-    ])
+      List<Request> requests = service.lookup(Request, null, 10, 1, [
+        "checklists.name==list_3",
+        "checklists.items.outcome==unknown&&checklists.items.status==required"
+      ])
   
     then: '1 result'
       requests.size() == 1
   }
   
-//  void 'The check list named list_3 with unknown, required item and a required yes item' () {
-//    when: 'Filter'
-//    List<Request> requests = service.lookup(Request, null, 10, 1, [
-//      "checklists.name==list_3",      
-//      "checklists.items.outcome==unknown&&checklists.items.status==required",
-//      "checklists.items.outcome==yes&&checklists.items.status==required"
-//    ])
-//  
-//    then: '1 results'
-//      requests.size() == 1
-//  }
+  void 'The check list named list_3 with unknown, required item and a required yes item' () {
+    when: 'Filter without groupings'
+      List<Request> requests = service.lookup(Request, null, 10, 1, [
+        "checklists.name==list_3",
+        "checklists.items.outcome==unknown&&checklists.items.status==required",
+        "checklists.items.outcome==yes&&checklists.items.status==required"
+      ])
+    
+    then: "Should always fail as you can't have a 2 different values for the same filed on the same item"
+    
+      requests.size() == 0
+      
+    when: 'Filter with groupings'
+      requests = service.lookup(Request, null, 10, 1, [
+        "checklists.name==list_3",
+        "(checklists.items.outcome==unknown&&checklists.items.status==required)",
+        "(checklists.items.outcome==yes&&checklists.items.status==required)"
+      ])
+    
+    then: "Single result with both statuses"
+    
+      requests.size() == 1
+  }
   
-//  new Request(name: 'Request 3')
-//  .addToChecklists(new CheckList(name: 'list_3')
-//    .addToItems(new CheckListItem(
-//      outcome: 'unknown',
-//      status: 'required'
-//    ))
-//    .addToItems(new CheckListItem(
-//      outcome: 'yes',
-//      status: 'required'
-//    ))
-//  )
+  void 'Test Ranges' () {
+    when: 'Filter'
+      List<Request> requests = service.lookup(Request, null, 10, 1, [
+        "0<number<3" //
+      ])
+    
+    then: "Macth 2"
+    
+      requests.size() == 2
+      
+    when: 'Filter'
+      requests = service.lookup(Request, null, 10, 1, [
+        "1<=number<3"
+      ])
+    
+    then: "Still 2"
+    
+      requests.size() == 2
+      
+    when: 'Filter'
+      requests = service.lookup(Request, null, 10, 1, [
+        "1<=number<=3"
+      ])
+    
+    then: "3 results"
+    
+      requests.size() == 3
+      
+    when: 'Filter'
+      requests = service.lookup(Request, null, 10, 1, [
+        "1<=number<4"
+      ])
+    
+    then: "3 results"
+    
+      requests.size() == 3
+      
+    when: 'Filter date'
+      LocalDate now = LocalDate.now()
+      DateTimeFormatter df = DateTimeFormatter.ISO_DATE
+      requests = service.lookup(Request, null, 10, 1, [
+        "date>${df.format(now)}"
+      ])
+    
+    then: "1 result"
+    
+      requests.size() == 1
+      
+    when: 'Filter date'
+      requests = service.lookup(Request, null, 10, 1, [
+        "date>=${df.format(now)}"
+      ])
+    
+    then: "3 results"
+    
+      requests.size() == 3
+      
+    when: 'Filter date range'
+      requests = service.lookup(Request, null, 10, 1, [
+        "${df.format(now)}<=date<=${df.format(now.plusDays(1))}"
+      ])
+    
+    then: "3 result"
+    
+      requests.size() == 3
+      
+    when: 'Filter date range'
+      requests = service.lookup(Request, null, 10, 1, [
+        "${df.format(now)}<date<=${df.format(now.plusDays(1))}"
+      ])
+    
+    then: "1 result"
+    
+      requests.size() == 1
+  }
   
   
   @Override
@@ -261,6 +383,9 @@ class CheckList {
 @Entity
 class Request {
   String name
+  
+  int number
+  LocalDate date
   
   static constraints = {
     name  nullable: false, blank: false

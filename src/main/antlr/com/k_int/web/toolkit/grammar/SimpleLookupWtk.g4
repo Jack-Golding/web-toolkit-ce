@@ -63,10 +63,15 @@ GT                   : '>' ;
 GE                   : '>=' ;
 LT                   : '<' ;
 LE                   : '<=' ;
-NLIKE                : '!~' ;
-LIKE                 : '=~' ;
+NCONT                : '!~' ;
+CONT                 : '=~' ;
 
-SPECIAL_OPERATOR     : IS NOT? (NULL | EMPTY | SET);
+ISNULL               : IS NULL;
+ISNOTNULL            : IS NOT NULL;
+ISSET                : IS SET;
+ISNOTSET             : IS NOT SET;
+ISEMPTY              : IS EMPTY;
+ISNOTEMPTY           : IS NOT EMPTY;
 
 WHITESPACE           : (' ' | '\t') ;
 NEWLINE              : ('\r'? '\n' | '\r')+;
@@ -81,18 +86,23 @@ value_exp
 ;
     
 operator
-  : GT | GE | LT | LE | EQ | EQEQ | CIEQ | NEQ | NLIKE | LIKE;
+  : opToken=(GT | GE | LT | LE | EQ | EQEQ | CIEQ | NEQ | NCONT | CONT)
+;
+  
+special_operator
+  : opToken=(ISNULL | ISNOTNULL | ISSET | ISNOTSET | ISEMPTY | ISNOTEMPTY)
+;
 
 special_op_expr
-  : subject=SUBJECT WHITESPACE op=SPECIAL_OPERATOR;
+  : subject=SUBJECT WHITESPACE special_operator;
     
 range_expr
   : lhval=value_exp lhop=(GT | GE | LT | LE) subject=SUBJECT rhop=(GT | GE | LT | LE) rhval=value_exp;
 
 standard_expr
-  : lhs=SUBJECT op=operator rhs=SUBJECT                 #ambiguousFilter
-  | subject=SUBJECT op=operator value=value_exp         #subjectFirstFilter
-  | value=value_exp op=operator subject=SUBJECT         #valueFirstFilter
+  : lhs=SUBJECT operator rhs=SUBJECT                    #ambiguousFilter
+  | subject=SUBJECT operator value=value_exp            #subjectFirstFilter
+  | value=value_exp operator subject=SUBJECT            #valueFirstFilter
 ;
 
 filter_expr
