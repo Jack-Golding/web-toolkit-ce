@@ -237,12 +237,34 @@ public class SimpleLookupServiceSpec extends HibernateSpec implements ServiceUni
       requests = service.lookup(Request, null, 10, 1, [
         "checklists.name==list_3",
         "(checklists.items.outcome==unknown&&checklists.items.status==required)",
-        "(checklists.items.outcome==yes&&checklists.items.status==required)"
+        "(checklists.items.outcome=i=yes&&checklists.items.status==required)"
+      ])
+      
+    then: "Single result with both statuses"
+    
+      requests.size() == 1
+      requests[0].name =="Request 3"
+      
+    when: 'Filter with groupings single filter'
+      requests = service.lookup(Request, null, 10, 1, [
+        "checklists.name==list_3&&(checklists.items.outcome==unknown&&checklists.items.status==required)&&(checklists.items.outcome==yes&&checklists.items.status==required)"
       ])
     
     then: "Single result with both statuses"
     
       requests.size() == 1
+      requests[0].name =="Request 3"
+      
+    when: 'Filter with groupings is negated'
+      requests = service.lookup(Request, null, 10, 1, [
+        "!(checklists.items.outcome==unknown&&checklists.items.status==required)",
+        "(checklists.items.outcome=i=yes&&checklists.items.status==required)"
+      ])
+    
+    then: "Single result"
+    
+      requests.size() == 1
+      requests[0].name == "Request 1"
   }
   
   void 'Test Ranges' () {
@@ -317,6 +339,49 @@ public class SimpleLookupServiceSpec extends HibernateSpec implements ServiceUni
       ])
     
     then: "1 result"
+    
+      requests.size() == 1
+      
+    when: 'Filter date range is negated'
+      requests = service.lookup(Request, null, 10, 1, [
+        "!${df.format(now)}<date<=${df.format(now.plusDays(1))}"
+      ])
+    
+    then: "2 result"
+    
+      requests.size() == 2
+  }
+  
+  void 'Text searching and filtering' () {
+    when: 'Filter'
+      List<Request> requests = service.lookup(Request, 'request', 10, 1, [
+        "0<number<3" //
+      ],['name'])
+    
+    then: "Macth 2"
+    
+      requests.size() == 2
+      
+    when: 'Filter matching "request 2" in "name"'
+      requests = service.lookup(Request, 'request 2', 10, 1, null, ['name'])
+    
+    then: "Matches 1"
+    
+      requests.size() == 1
+      
+    when: 'Filter matching "request 2" in "name" where the "number" is bigger than 2'
+      requests = service.lookup(Request, '"request 2"', 10, 1, [
+        "number>2"
+      ],['name'])
+    
+    then: "Match 0"
+    
+      requests.size() == 0
+      
+    when: 'Filter for name "request 2" with quotes'
+      requests = service.lookup(Request, '"request 2"', 10, 1, null, ['name'])
+    
+    then: "Match 1"
     
       requests.size() == 1
   }

@@ -509,6 +509,8 @@ class SimpleLookupService {
 //  }
   
   private void parseFilters ( final DetachedCriteria criteria, final Map<String, String> aliasStack, final Collection<String> filters ) {
+    // Jump out of the routine immediately if no filters or empty list
+    if (!filters) return
     
     // We parse the filters and build up the criteria.
 //    filters?.each {
